@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  passwordHash  String
+  name          String
+  createdAt     DateTime        @default(now())
+  weddings      WeddingMember[]
+  tasksAssigned Task[]          @relation("TaskAssignee")
+}
+
+model Wedding {
+  id           String          @id @default(cuid())
+  name         String
+  weddingDate  DateTime?
+  createdAt    DateTime        @default(now())
+  members      WeddingMember[]
+  categories   Category[]
+  vendors      Vendor[]
+  tasks        Task[]
+}
+
+enum MemberRole {
+  OWNER
+  PARTNER
+}
+
+model WeddingMember {
+  id        String      @id @default(cuid())
+  weddingId String
+  userId    String
+  role      MemberRole  @default(PARTNER)
+  joinedAt  DateTime    @default(now())
+
+  wedding   Wedding     @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([weddingId, userId])
+  @@index([userId])
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  weddingId   String
+  name        String
+  createdAt   DateTime     @default(now())
+
+  wedding     Wedding      @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  budgetItems BudgetItem[]
+  vendors     Vendor[]
+
+  @@index([weddingId])
+}
+
+model BudgetItem {
+  id            String    @id @default(cuid())
+  categoryId    String
+  name          String
+  budgetAmount  Decimal   @db.Decimal(14, 2)
+  actualAmount  Decimal   @default(0) @db.Decimal(14, 2)
+  notes         String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  category      Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+}
+
+model Vendor {
+  id             String     @id @default(cuid())
+  weddingId      String
+  categoryId     String?
+  name           String
+  contact        String?
+  totalContract  Decimal?   @db.Decimal(14, 2)
+  createdAt      DateTime   @default(now())
+
+  wedding        Wedding    @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  category       Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  payments       Payment[]
+
+  @@index([weddingId])
+  @@index([categoryId])
+}
+
+enum PaymentType {
+  DP
+  CICILAN
+  PELUNASAN
+}
+
+enum PaymentStatus {
+  BELUM_BAYAR
+  SUDAH_BAYAR
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  vendorId    String
+  type        PaymentType
+  amount      Decimal       @db.Decimal(14, 2)
+  dueDate     DateTime?
+  paidAt      DateTime?
+  status      PaymentStatus @default(BELUM_BAYAR)
+  createdAt   DateTime      @default(now())
+
+  vendor      Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@index([dueDate])
+}
+
+enum TaskStatus {
+  BELUM
+  SEDANG_BERJALAN
+  SELESAI
+}
+
+model Task {
+  id           String      @id @default(cuid())
+  weddingId    String
+  title        String
+  dueDate      DateTime?
+  status       TaskStatus  @default(BELUM)
+  assignedToId String?
+  createdAt    DateTime    @default(now())
+
+  wedding      Wedding     @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  assignedTo   User?       @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([weddingId])
+  @@index([dueDate])
+}
