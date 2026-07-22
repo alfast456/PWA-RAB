@@ -1,10 +1,40 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { SectionHeading } from "@/components/wedding/section-heading";
+import { LedgerRow } from "@/components/wedding/ledger-row";
+import { StatusBadge } from "@/components/wedding/status-badge";
+import { StickyActionBar } from "@/components/wedding/sticky-action-bar";
+import { Plus, Pencil, Trash, Save } from "lucide-react";
 
 interface Category {
   id: string;
   name: string;
+  totalBudget?: number;
+  totalActual?: number;
 }
 
 interface BudgetItem {
@@ -16,214 +46,442 @@ interface BudgetItem {
   notes?: string | null;
 }
 
-export default function RabPage({ params }: { params: { weddingId: string } }) {
+const fmt = (amount: number) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
+
+export default function RabPage() {
+  const params = useParams();
+  const weddingId = params.weddingId as string;
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<BudgetItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newCategory, setNewCategory] = useState("");
-  const [showAddCategory, setShowAddCategory] = useState(false);
-  const [newItem, setNewItem] = useState({ categoryId: "", name: "", budgetAmount: "", actualAmount: "", notes: "" });
+
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [editingCat, setEditingCat] = useState<Category | null>(null);
+  const [catName, setCatName] = useState("");
+
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
+  const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [itemBudget, setItemBudget] = useState("");
+  const [itemActual, setItemActual] = useState("");
+  const [itemNotes, setItemNotes] = useState("");
+
+  const fetchData = useCallback(async () => {
+    const [catRes, itemRes] = await Promise.all([
+      fetch(`/api/wedding/${weddingId}/categories`),
+      fetch(`/api/wedding/${weddingId}/budget-items`),
+    ]);
+    const catData = await catRes.json();
+    const itemData = await itemRes.json();
+    if (Array.isArray(catData)) setCategories(catData);
+    if (Array.isArray(itemData)) setItems(itemData);
+    setLoading(false);
+  }, [weddingId]);
 
   useEffect(() => {
-    fetch(`/api/wedding/${params.weddingId}/categories`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setCategories(data);
-      });
-    fetch(`/api/wedding/${params.weddingId}/budget-items`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setItems(data);
-      })
-      .finally(() => setLoading(false));
-  }, [params.weddingId]);
+    fetchData();
+  }, [fetchData]);
 
-  const addCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch(`/api/wedding/${params.weddingId}/categories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newCategory }),
-    });
-    if (res.ok) {
-      const cat = await res.json();
-      setCategories([...categories, cat]);
-      setNewCategory("");
-      setShowAddCategory(false);
-    }
-  };
-
-  const addItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const catId = categories[0]?.id;
-    if (!catId) return;
-
-    const res = await fetch(`/api/wedding/${params.weddingId}/budget-items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        categoryId: catId,
-        name: newItem.name,
-        budgetAmount: parseFloat(newItem.budgetAmount) || 0,
-        actualAmount: parseFloat(newItem.actualAmount) || 0,
-        notes: newItem.notes,
-      }),
-    });
-    if (res.ok) {
-      const item = await res.json();
-      setItems([...items, item]);
-      setNewItem({ categoryId: "", name: "", budgetAmount: "", actualAmount: "", notes: "" });
-    }
-  };
-
-  const getCategoryItems = (catId: string) => items.filter((i) => i.categoryId === catId);
+  const getCategoryItems = (catId: string) =>
+    items.filter((i) => i.categoryId === catId);
 
   const getCategoryTotal = (catId: string) => {
     const catItems = getCategoryItems(catId);
     return {
-      budget: catItems.reduce((sum, i) => sum + i.budgetAmount, 0),
-      actual: catItems.reduce((sum, i) => sum + i.actualAmount, 0),
+      budget: catItems.reduce((s, i) => s + i.budgetAmount, 0),
+      actual: catItems.reduce((s, i) => s + i.actualAmount, 0),
     };
   };
 
-  const totalBudget = items.reduce((sum, i) => sum + i.budgetAmount, 0);
-  const totalActual = items.reduce((sum, i) => sum + i.actualAmount, 0);
+  const totalBudget = items.reduce((s, i) => s + i.budgetAmount, 0);
+  const totalActual = items.reduce((s, i) => s + i.actualAmount, 0);
+  const isOver = totalActual > totalBudget;
 
-  if (loading) return <div className="p-6">Memuat...</div>;
+  const openAddCategory = () => {
+    setEditingCat(null);
+    setCatName("");
+    setCatDialogOpen(true);
+  };
+
+  const openEditCategory = (cat: Category) => {
+    setEditingCat(cat);
+    setCatName(cat.name);
+    setCatDialogOpen(true);
+  };
+
+  const saveCategory = async () => {
+    if (editingCat) {
+      const res = await fetch(
+        `/api/wedding/${weddingId}/categories/${editingCat.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: catName }),
+        }
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setCategories(categories.map((c) => (c.id === updated.id ? updated : c)));
+      }
+    } else {
+      const res = await fetch(`/api/wedding/${weddingId}/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: catName }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setCategories([...categories, created]);
+      }
+    }
+    setCatDialogOpen(false);
+  };
+
+  const deleteCategory = async (catId: string) => {
+    const res = await fetch(`/api/wedding/${weddingId}/categories/${catId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setCategories(categories.filter((c) => c.id !== catId));
+      setItems(items.filter((i) => i.categoryId !== catId));
+    }
+  };
+
+  const openAddItem = (categoryId: string) => {
+    setEditingItem(null);
+    setItemCategoryId(categoryId);
+    setItemName("");
+    setItemBudget("");
+    setItemActual("");
+    setItemNotes("");
+    setItemDialogOpen(true);
+  };
+
+  const openEditItem = (item: BudgetItem) => {
+    setEditingItem(item);
+    setItemCategoryId(item.categoryId);
+    setItemName(item.name);
+    setItemBudget(String(item.budgetAmount));
+    setItemActual(String(item.actualAmount));
+    setItemNotes(item.notes || "");
+    setItemDialogOpen(true);
+  };
+
+  const saveItem = async () => {
+    const payload = {
+      categoryId: itemCategoryId,
+      name: itemName,
+      budgetAmount: parseFloat(itemBudget) || 0,
+      actualAmount: parseFloat(itemActual) || 0,
+      notes: itemNotes || undefined,
+    };
+    if (editingItem) {
+      const res = await fetch(
+        `/api/wedding/${weddingId}/budget-items/${editingItem.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setItems(items.map((i) => (i.id === updated.id ? updated : i)));
+      }
+    } else {
+      const res = await fetch(`/api/wedding/${weddingId}/budget-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setItems([...items, created]);
+      }
+    }
+    setItemDialogOpen(false);
+  };
+
+  const deleteItem = async (itemId: string) => {
+    const res = await fetch(
+      `/api/wedding/${weddingId}/budget-items/${itemId}`,
+      { method: "DELETE" }
+    );
+    if (res.ok) {
+      setItems(items.filter((i) => i.id !== itemId));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-6 text-muted-foreground">
+        Memuat...
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Rencana Anggaran Biaya</h2>
-        <button
-          onClick={() => setShowAddCategory(!showAddCategory)}
-          className="rounded-md bg-black px-4 py-2 text-white hover:bg-gray-800"
-        >
-          Tambah Kategori
-        </button>
+        <h2 className="font-display text-2xl">Rencana Anggaran Biaya</h2>
+        <Button onClick={openAddCategory} className="hidden md:flex">
+          <Plus className="w-4 h-4 mr-2" /> Tambah Kategori
+        </Button>
       </div>
 
-      {showAddCategory && (
-        <form onSubmit={addCategory} className="flex gap-2">
-          <input
-            type="text"
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            placeholder="Nama kategori"
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2"
-            required
-          />
-          <button type="submit" className="rounded-md bg-black px-4 py-2 text-white hover:bg-gray-800">
-            Simpan
-          </button>
-        </form>
-      )}
-
-      <div className="rounded-lg border p-4">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-sm text-gray-600">Total Budget</div>
-            <div className="text-lg font-semibold">{totalBudget.toLocaleString("id-ID")}</div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-600">Total Actual</div>
-            <div className="text-lg font-semibold">{totalActual.toLocaleString("id-ID")}</div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-600">Sisa</div>
-            <div className={`text-lg font-semibold ${totalActual > totalBudget ? "text-red-600" : ""}`}>
-              {(totalBudget - totalActual).toLocaleString("id-ID")}
+      <Card>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 text-center">
+            <div>
+              <div className="text-sm text-muted-foreground">Total Budget</div>
+              <div className="font-display text-2xl tabular-nums">
+                {fmt(totalBudget)}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Total Aktual</div>
+              <div className="font-display text-2xl tabular-nums">
+                {fmt(totalActual)}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Sisa</div>
+              <div className="font-display text-2xl tabular-nums">
+                {fmt(totalBudget - totalActual)}
+              </div>
+              <StatusBadge
+                variant={isOver ? "over" : "aman"}
+                className="mt-1"
+              />
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
+        {categories.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            Belum ada kategori. Tambahkan kategori untuk memulai.
+          </p>
+        )}
         {categories.map((cat) => {
-          const catItems = getCategoryItems(cat.id);
           const totals = getCategoryTotal(cat.id);
-          const isOverBudget = totals.actual > totals.budget;
+          const catItems = getCategoryItems(cat.id);
+          const catOver = totals.actual > totals.budget && totals.budget > 0;
 
           return (
-            <div key={cat.id} className="rounded-lg border">
-              <div className="flex items-center justify-between p-4">
-                <div>
-                  <div className="font-semibold">{cat.name}</div>
-                  <div className="text-sm text-gray-600">
-                    Budget: {totals.budget.toLocaleString("id-ID")} | Actual:{" "}
-                    {totals.actual.toLocaleString("id-ID")}
-                  </div>
+            <div key={cat.id} className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <SectionHeading
+                    title={cat.name}
+                    value={fmt(totals.budget)}
+                  />
                 </div>
-                <div
-                  className={`px-2 py-1 rounded text-sm ${
-                    isOverBudget ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
-                  }`}
+                {catOver && <StatusBadge variant="over" />}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openEditCategory(cat)}
                 >
-                  {isOverBudget ? "Over Budget" : "On Track"}
-                </div>
+                  <Pencil className="w-4 h-4 mr-2" /> Edit
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <Trash className="w-4 h-4 mr-2" /> Hapus
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Hapus Kategori</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Kategori &quot;{cat.name}&quot; dan semua item di
+                        dalamnya akan dihapus. Lanjutkan?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteCategory(cat.id)}>
+                        Hapus
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
 
-              <div className="px-4 pb-4">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-600">
-                      <th className="pb-2">Nama</th>
-                      <th className="pb-2">Budget</th>
-                      <th className="pb-2">Actual</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {catItems.map((item) => (
-                      <tr key={item.id} className="border-t">
-                        <td className="py-2">{item.name}</td>
-                        <td className="py-2">{item.budgetAmount.toLocaleString("id-ID")}</td>
-                        <td className="py-2">{item.actualAmount.toLocaleString("id-ID")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {catItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground pl-1">
+                  Belum ada item.
+                </p>
+              ) : (
+                catItems.map((item) => (
+                  <LedgerRow
+                    key={item.id}
+                    label={item.name}
+                    value={`${fmt(item.actualAmount)} / ${fmt(item.budgetAmount)}`}
+                    sublabel={item.notes || undefined}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditItem(item)}
+                    >
+                      <Pencil className="w-4 h-4 mr-2" /> Edit
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <Trash className="w-4 h-4 mr-2" /> Hapus
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Hapus Item</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Item &quot;{item.name}&quot; akan dihapus.
+                            Lanjutkan?
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Batal</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteItem(item.id)}
+                          >
+                            Hapus
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </LedgerRow>
+                ))
+              )}
 
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-sm font-medium">Tambah Budget Item</summary>
-                  <form onSubmit={addItem} className="mt-2 grid grid-cols-2 gap-2">
-                    <input
-                      type="hidden"
-                      value={cat.id}
-                      onChange={(e) => setNewItem({ ...newItem, categoryId: e.target.value })}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Nama item"
-                      value={newItem.name}
-                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                      className="rounded-md border border-gray-300 px-2 py-1"
-                      required
-                    />
-                    <input
-                      type="number"
-                      placeholder="Budget"
-                      value={newItem.budgetAmount}
-                      onChange={(e) => setNewItem({ ...newItem, budgetAmount: e.target.value })}
-                      className="rounded-md border border-gray-300 px-2 py-1"
-                      required
-                    />
-                    <input
-                      type="number"
-                      placeholder="Actual"
-                      value={newItem.actualAmount}
-                      onChange={(e) => setNewItem({ ...newItem, actualAmount: e.target.value })}
-                      className="rounded-md border border-gray-300 px-2 py-1"
-                    />
-                    <button type="submit" className="rounded-md bg-black px-3 py-1 text-white hover:bg-gray-800">
-                      Tambah
-                    </button>
-                  </form>
-                </details>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openAddItem(cat.id)}
+              >
+                <Plus className="w-4 h-4 mr-2" /> Item
+              </Button>
             </div>
           );
         })}
       </div>
+
+      <div className="md:hidden">
+        <StickyActionBar>
+          <Button onClick={openAddCategory} className="w-full">
+            <Plus className="w-4 h-4 mr-2" /> Tambah Kategori
+          </Button>
+        </StickyActionBar>
+      </div>
+
+      <Sheet open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl flex flex-col p-0">
+          <SheetHeader className="p-6 pb-0">
+            <SheetTitle>
+              {editingCat ? "Edit Kategori" : "Tambah Kategori"}
+            </SheetTitle>
+            <SheetDescription>
+              {editingCat
+                ? "Ubah nama kategori."
+                : "Masukkan nama kategori baru."}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="overflow-y-auto flex-1 p-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="catName">Nama Kategori</Label>
+                <Input
+                  id="catName"
+                  value={catName}
+                  onChange={(e) => setCatName(e.target.value)}
+                  placeholder="Nama kategori"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+          <div className="sticky bottom-0 bg-card border-t border-border p-4 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]">
+            <Button size="lg" className="w-full h-11" onClick={saveCategory} disabled={!catName.trim()}>
+              <Save className="mr-2 h-4 w-4" /> Simpan
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl flex flex-col p-0">
+          <SheetHeader className="p-6 pb-0">
+            <SheetTitle>
+              {editingItem ? "Edit Item" : "Tambah Item"}
+            </SheetTitle>
+            <SheetDescription>
+              {editingItem
+                ? "Ubah detail budget item."
+                : "Masukkan detail budget item baru."}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="overflow-y-auto flex-1 p-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="itemName">Nama Item</Label>
+                <Input
+                  id="itemName"
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  placeholder="Nama item"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="itemBudget">Budget</Label>
+                  <Input
+                    id="itemBudget"
+                    type="number"
+                    value={itemBudget}
+                    onChange={(e) => setItemBudget(e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="itemActual">Aktual</Label>
+                  <Input
+                    id="itemActual"
+                    type="number"
+                    value={itemActual}
+                    onChange={(e) => setItemActual(e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="itemNotes">Catatan</Label>
+                <Input
+                  id="itemNotes"
+                  value={itemNotes}
+                  onChange={(e) => setItemNotes(e.target.value)}
+                  placeholder="Catatan (opsional)"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="sticky bottom-0 bg-card border-t border-border p-4 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]">
+            <Button size="lg" className="w-full h-11" onClick={saveItem} disabled={!itemName.trim()}>
+              <Save className="mr-2 h-4 w-4" /> Simpan
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

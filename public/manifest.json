@@ -4,8 +4,8 @@
   "description": "Rencana Anggaran Biaya Pernikahan",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#FBF4F1",
+  "theme_color": "#FBF4F1",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",

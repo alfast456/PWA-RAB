@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -35,63 +40,61 @@ export default function RegisterPage() {
 
   return (
     <main className="flex-1 flex items-center justify-center p-6">
-      <form onSubmit={handleSubmit} className="max-w-sm w-full space-y-4">
-        <h1 className="text-2xl font-bold text-center">Daftar</h1>
-
-        {error && (
-          <div className="text-red-600 text-sm text-center">{error}</div>
-        )}
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Nama</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2"
-            minLength={8}
-            required
-          />
-          <p className="text-xs text-gray-500 mt-1">Minimal 8 karakter</p>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-black px-4 py-2 text-white hover:bg-gray-800 disabled:opacity-50"
-        >
-          {loading ? "Memproses..." : "Daftar"}
-        </button>
-
-        <p className="text-center text-sm text-gray-600">
-          Sudah punya akun?{" "}
-          <a href="/login" className="text-blue-600 hover:underline">
-            Login
-          </a>
-        </p>
-      </form>
+      <Card className="max-w-sm w-full">
+        <form onSubmit={handleSubmit}>
+          <CardHeader>
+            <CardTitle className="font-display text-center">Daftar</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="text-destructive text-sm text-center">{error}</div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="name">Nama</Label>
+              <Input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+              <p className="text-xs text-muted-foreground">Minimal 8 karakter</p>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Memproses..." : "Daftar"}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              Sudah punya akun?{" "}
+              <Link href="/login" className="text-primary hover:underline">
+                Login
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
     </main>
   );
 }

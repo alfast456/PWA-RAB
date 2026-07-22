@@ -2,21 +2,22 @@
 
 ## 1. Tech Stack
 
-| Layer | Pilihan |
-|---|---|
-| Framework | Next.js 14+ (App Router) |
-| Bahasa | TypeScript |
-| ORM | Prisma |
-| Database | MySQL |
-| Auth | NextAuth.js (Credentials Provider) |
-| Styling | Tailwind CSS |
-| PWA | `@ducanh2912/next-pwa` (fork next-pwa yang aktif dimaintain untuk App Router) |
-| Hosting | VPS (self-managed) — Nginx (reverse proxy + SSL) + PM2 (process manager) |
-| Validasi input | Zod |
+| Layer          | Pilihan                                                                       |
+| -------------- | ----------------------------------------------------------------------------- |
+| Framework      | Next.js 14+ (App Router)                                                      |
+| Bahasa         | TypeScript                                                                    |
+| ORM            | Prisma                                                                        |
+| Database       | MySQL                                                                         |
+| Auth           | NextAuth.js (Credentials Provider)                                            |
+| Styling        | Tailwind CSS + shadcn/ui                                                      |
+| PWA            | `@ducanh2912/next-pwa` (fork next-pwa yang aktif dimaintain untuk App Router) |
+| Hosting        | VPS (self-managed) — Nginx (reverse proxy + SSL) + PM2 (process manager)      |
+| Validasi input | Zod                                                                           |
 
 ## 2. Arsitektur Umum
 
 Aplikasi full-stack dalam satu codebase Next.js:
+
 - **Frontend (App Router pages):** Server Components untuk render awal, Client Components untuk interaktivitas (form, modal, dsb).
 - **Backend (API Routes / Route Handlers):** `/app/api/**` menangani semua operasi data (CRUD), tervalidasi dengan Zod, terhubung ke MySQL via Prisma.
 - **Auth layer:** NextAuth mengelola session (JWT strategy, disimpan di cookie httpOnly). Setiap Route Handler yang butuh data wedding memvalidasi session lalu memverifikasi keanggotaan user pada `wedding_id` terkait (tenant guard).
@@ -71,11 +72,16 @@ MySQL Database
     /wedding/[id]/tasks/[taskId]/route.ts
   layout.tsx
   manifest.ts (atau /public/manifest.json)
+/components
+  /ui/*                  -- komponen shadcn/ui hasil `npx shadcn add` (button, card, table, dsb)
+  /wedding/*             -- komponen komposit khusus app (BudgetProgressBar, PaymentStatusBadge,
+                            CategoryCard, TaskItem) — dibangun di atas /ui sesuai 06-DESIGN-SYSTEM.md
 /lib
   /prisma.ts           -- singleton PrismaClient
   /auth.ts              -- NextAuth config (authOptions)
   /tenant-guard.ts       -- helper: assertWeddingMember(userId, weddingId)
   /validators/*.ts       -- skema Zod per resource
+  /utils.ts              -- cn() helper (dari shadcn/ui)
 /prisma
   /schema.prisma
   /migrations
@@ -97,6 +103,7 @@ next.config.js           -- konfigurasi next-pwa
 ## 5. PWA Configuration
 
 - `next.config.js` dibungkus dengan `withPWA` dari `@ducanh2912/next-pwa`.
+- **Viewport meta wajib** di `app/layout.tsx` (lihat `06-DESIGN-SYSTEM.md` §8) — `viewport-fit=cover` diperlukan agar `env(safe-area-inset-bottom)` pada `<BottomNav />` berfungsi di perangkat ber-notch.
 - `public/manifest.json`: nama app, short_name, theme_color, background_color, icons (192x192, 512x512, termasuk maskable icon).
 - Strategi caching:
   - Asset statis (JS/CSS/font): cache-first.
@@ -122,5 +129,10 @@ NEXTAUTH_URL="https://your-domain.com"
 6. **HTTPS wajib** — PWA (service worker) hanya berjalan penuh di atas HTTPS (kecuali localhost saat development).
 7. **Env di server:** simpan `.env` di server (tidak masuk git), pastikan `DATABASE_URL` dan `NEXTAUTH_SECRET` sudah production-ready.
 
+## 8. UI & Design System
+
+Semua tampilan dibangun di atas **shadcn/ui** (komponen di-generate via CLI ke `/components/ui`, bukan dependency npm — jadi bebas dikustomisasi) dengan token warna/tipografi kustom bertema wedding (palet soft). Detail lengkap palet warna, font pairing, dan aturan styling per fitur ada di `06-DESIGN-SYSTEM.md` — dokumen itu jadi rujukan wajib setiap kali membangun/mengubah UI, supaya konsisten di semua halaman.
+
 ---
-Dokumen terkait: `01-PRD.md`, `03-DATABASE-SCHEMA.md`, `04-API-SPEC.md`, `05-IMPLEMENTATION-PLAN.md`
+
+Dokumen terkait: `01-PRD.md`, `03-DATABASE-SCHEMA.md`, `04-API-SPEC.md`, `05-IMPLEMENTATION-PLAN.md`, `06-DESIGN-SYSTEM.md`

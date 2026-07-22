@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 interface Member {
   id: string;
@@ -12,7 +17,8 @@ interface Member {
   role: string;
 }
 
-export default function MembersPage({ params }: { params: { weddingId: string } }) {
+export default function MembersPage({ params }: { params: Promise<{ weddingId: string }> }) {
+  const { weddingId } = use(params);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -20,7 +26,7 @@ export default function MembersPage({ params }: { params: { weddingId: string } 
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/wedding/${params.weddingId}/members`)
+    fetch(`/api/wedding/${weddingId}/members`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -28,14 +34,14 @@ export default function MembersPage({ params }: { params: { weddingId: string } 
         }
       })
       .finally(() => setLoading(false));
-  }, [params.weddingId]);
+  }, [weddingId]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    const res = await fetch(`/api/wedding/${params.weddingId}/members`, {
+    const res = await fetch(`/api/wedding/${weddingId}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
@@ -53,44 +59,59 @@ export default function MembersPage({ params }: { params: { weddingId: string } 
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <h2 className="text-xl font-bold">Members</h2>
+    <div className="max-w-lg mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
+      <h2 className="text-xl font-display">Members</h2>
 
-      <form onSubmit={handleInvite} className="flex gap-2">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email partner"
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2"
-          required
-        />
-        <button
-          type="submit"
-          className="rounded-md bg-black px-4 py-2 text-white hover:bg-gray-800"
-        >
-          Undang
-        </button>
-      </form>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Undang Partner</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleInvite} className="flex gap-2">
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email partner"
+              className="flex-1"
+              required
+            />
+            <Button type="submit">Undang</Button>
+          </form>
+          {error && <div className="text-destructive text-sm">{error}</div>}
+          {success && <div className="text-sm text-green-600">{success}</div>}
+        </CardContent>
+      </Card>
 
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      {success && <div className="text-green-600 text-sm">{success}</div>}
-
-      {loading ? (
-        <p>Memuat...</p>
-      ) : (
-        <ul className="space-y-2">
-          {members.map((m) => (
-            <li key={m.id} className="rounded-lg border p-3 flex justify-between">
-              <div>
-                <div className="font-medium">{m.user.name}</div>
-                <div className="text-sm text-gray-600">{m.user.email}</div>
-              </div>
-              <div className="text-sm text-gray-500">{m.role}</div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Daftar Anggota</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-muted-foreground">Memuat...</p>
+          ) : members.length === 0 ? (
+            <p className="text-muted-foreground">Belum ada anggota.</p>
+          ) : (
+            <div className="space-y-0">
+              {members.map((m, i) => (
+                <div key={m.id}>
+                  {i > 0 && <Separator />}
+                  <div className="flex items-center justify-between py-3">
+                    <div>
+                      <div className="font-medium">{m.user.name}</div>
+                      <div className="text-sm text-muted-foreground">{m.user.email}</div>
+                    </div>
+                    <Badge variant={m.role === "OWNER" ? "default" : "secondary"}>
+                      {m.role}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
