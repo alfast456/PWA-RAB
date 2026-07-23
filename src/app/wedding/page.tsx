@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 
 interface Wedding {
   id: string;
@@ -30,9 +32,14 @@ export default function WeddingListPage() {
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display">Wedding Saya</h1>
-        <Button asChild>
-          <Link href="/wedding/new">Buat Wedding Baru</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => signOut({ callbackUrl: window.location.origin + '/login' })}>
+            <LogOut className="w-4 h-4 mr-2" /> Logout
+          </Button>
+          <Button asChild>
+            <Link href="/wedding/new">Buat Wedding Baru</Link>
+          </Button>
+        </div>
       </div>
 
       {weddings.length === 0 ? (

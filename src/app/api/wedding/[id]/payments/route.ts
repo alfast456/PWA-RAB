@@ -109,6 +109,7 @@ export async function POST(
         amount: parsed.amount,
         dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
       },
+      include: { vendor: true },
     });
 
     return NextResponse.json(payment, { status: 201 });

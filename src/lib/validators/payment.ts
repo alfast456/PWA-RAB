@@ -4,7 +4,7 @@ export const paymentCreateSchema = z.object({
   vendorId: z.string(),
   type: z.enum(["DP", "CICILAN", "PELUNASAN"]),
   amount: z.number().nonnegative(),
-  dueDate: z.string().datetime().optional(),
+  dueDate: z.string().optional(),
 });
 
 export const paymentUpdateSchema = z.object({

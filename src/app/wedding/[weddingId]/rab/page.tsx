@@ -46,6 +46,15 @@ interface BudgetItem {
   notes?: string | null;
 }
 
+interface Summary {
+  totalBudget: number;
+  totalActual: number;
+  remaining: number;
+  categoriesOverBudget: string[];
+  upcomingPayments: { vendorName: string; amount: number; dueDate: string }[];
+  taskProgress: { total: number; selesai: number };
+}
+
 const fmt = (amount: number) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -59,6 +68,7 @@ export default function RabPage() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<BudgetItem[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [catDialogOpen, setCatDialogOpen] = useState(false);
@@ -74,14 +84,16 @@ export default function RabPage() {
   const [itemNotes, setItemNotes] = useState("");
 
   const fetchData = useCallback(async () => {
-    const [catRes, itemRes] = await Promise.all([
+    const [catRes, itemRes, sumRes] = await Promise.all([
       fetch(`/api/wedding/${weddingId}/categories`),
       fetch(`/api/wedding/${weddingId}/budget-items`),
+      fetch(`/api/wedding/${weddingId}/summary`),
     ]);
     const catData = await catRes.json();
     const itemData = await itemRes.json();
     if (Array.isArray(catData)) setCategories(catData);
     if (Array.isArray(itemData)) setItems(itemData);
+    if (sumRes.ok) setSummary(await sumRes.json());
     setLoading(false);
   }, [weddingId]);
 
@@ -100,9 +112,10 @@ export default function RabPage() {
     };
   };
 
-  const totalBudget = items.reduce((s, i) => s + i.budgetAmount, 0);
-  const totalActual = items.reduce((s, i) => s + i.actualAmount, 0);
-  const isOver = totalActual > totalBudget;
+  const totalBudget = summary?.totalBudget ?? items.reduce((s, i) => s + i.budgetAmount, 0);
+  const totalActual = summary?.totalActual ?? items.reduce((s, i) => s + i.actualAmount, 0);
+  const remaining = summary?.remaining ?? totalBudget - totalActual;
+  const isOver = remaining < 0;
 
   const openAddCategory = () => {
     setEditingCat(null);
@@ -151,6 +164,7 @@ export default function RabPage() {
     if (res.ok) {
       setCategories(categories.filter((c) => c.id !== catId));
       setItems(items.filter((i) => i.categoryId !== catId));
+      fetchData();
     }
   };
 
@@ -194,6 +208,7 @@ export default function RabPage() {
       if (res.ok) {
         const updated = await res.json();
         setItems(items.map((i) => (i.id === updated.id ? updated : i)));
+        fetchData();
       }
     } else {
       const res = await fetch(`/api/wedding/${weddingId}/budget-items`, {
@@ -204,6 +219,7 @@ export default function RabPage() {
       if (res.ok) {
         const created = await res.json();
         setItems([...items, created]);
+        fetchData();
       }
     }
     setItemDialogOpen(false);
@@ -216,6 +232,7 @@ export default function RabPage() {
     );
     if (res.ok) {
       setItems(items.filter((i) => i.id !== itemId));
+      fetchData();
     }
   };
 
@@ -254,7 +271,7 @@ export default function RabPage() {
             <div>
               <div className="text-sm text-muted-foreground">Sisa</div>
               <div className="font-display text-2xl tabular-nums">
-                {fmt(totalBudget - totalActual)}
+                {fmt(remaining)}
               </div>
               <StatusBadge
                 variant={isOver ? "over" : "aman"}

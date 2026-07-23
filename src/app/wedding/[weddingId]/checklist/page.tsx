@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/wedding/status-badge";
 import { StickyActionBar } from "@/components/wedding/sticky-action-bar";
-import { Plus, Trash, Save } from "lucide-react";
+import { Plus, Trash, Save, Pencil } from "lucide-react";
 
 interface Task {
   id: string;
@@ -62,9 +62,11 @@ export default function ChecklistPage() {
   const [filter, setFilter] = useState("SEMUA");
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskAssigned, setTaskAssigned] = useState("");
+  const [taskStatus, setTaskStatus] = useState("BELUM");
 
   const fetchData = useCallback(async () => {
     const [tRes, mRes] = await Promise.all([
@@ -83,18 +85,33 @@ export default function ChecklistPage() {
   }, [fetchData]);
 
   const saveTask = async () => {
-    const res = await fetch(`/api/wedding/${weddingId}/tasks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: taskTitle,
-        dueDate: taskDueDate || undefined,
-        assignedToId: taskAssigned !== "none" ? taskAssigned : undefined,
-      }),
-    });
-    if (res.ok) {
-      const created = await res.json();
-      setTasks([...tasks, created]);
+    const payload = {
+      title: taskTitle,
+      dueDate: taskDueDate || undefined,
+      assignedToId: taskAssigned !== "none" ? taskAssigned : undefined,
+      status: taskStatus,
+    };
+
+    if (editingTask) {
+      const res = await fetch(`/api/wedding/${weddingId}/tasks/${editingTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setTasks(tasks.map((t) => (t.id === updated.id ? updated : t)));
+      }
+    } else {
+      const res = await fetch(`/api/wedding/${weddingId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setTasks([...tasks, created]);
+      }
     }
     setDialogOpen(false);
   };
@@ -138,6 +155,24 @@ export default function ChecklistPage() {
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
 
+  const openAddTask = () => {
+    setEditingTask(null);
+    setTaskTitle("");
+    setTaskDueDate("");
+    setTaskAssigned("none");
+    setTaskStatus("BELUM");
+    setDialogOpen(true);
+  };
+
+  const openEditTask = (task: Task) => {
+    setEditingTask(task);
+    setTaskTitle(task.title);
+    setTaskDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "");
+    setTaskAssigned(task.assignedTo?.name ? (members.find(m => m.user.name === task.assignedTo!.name)?.user.id || "none") : "none");
+    setTaskStatus(task.status);
+    setDialogOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-6 text-muted-foreground">
@@ -146,103 +181,152 @@ export default function ChecklistPage() {
     );
   }
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-2xl">Checklist Persiapan</h2>
-        <Button
-          className="hidden md:flex"
-          onClick={() => {
-            setTaskTitle("");
-            setTaskDueDate("");
-            setTaskAssigned("none");
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" /> Tambah Task
-        </Button>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm font-medium">
-          <span>Progress</span>
-          <span>
-            {completedCount} / {tasks.length} selesai
-          </span>
+return (
+    <div className="w-full max-w-5xl mx-auto px-4 xs:px-2 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-4">
+<div className="flex items-center justify-between">
+          <h2 className="font-display text-2xl sm:text-xl">Checklist Persiapan</h2>
+          <Button
+            className="hidden md:flex sm:ml-4"
+            onClick={openAddTask}
+          >
+            <Plus className="w-4 h-4 mr-2" /> Tambah Task
+          </Button>
         </div>
-        <Progress value={progressVal} />
-      </div>
+
+      <div className="space-y-2 sm:space-y-4">
+          <div className="flex items-center justify-between text-sm font-medium sm:flex">
+            <span>Progress</span>
+            <span className="flex items-center">
+              <span>{completedCount}</span>
+              <span className="mx-1"> / </span>
+              <span>{tasks.length}</span>
+              <span className="ml-1 text-sm text-muted-foreground"> selesai</span>
+            </span>
+          </div>
+          <div className="flex items-center justify-center sm:justify-start">
+            <Progress value={progressVal} className="w-full sm:w-64" />
+          </div>
+        </div>
 
       <Tabs value={filter} onValueChange={setFilter}>
-        <TabsList>
-          <TabsTrigger value="SEMUA">Semua</TabsTrigger>
-          <TabsTrigger value="BELUM">Belum</TabsTrigger>
-          <TabsTrigger value="SEDANG">Sedang</TabsTrigger>
-          <TabsTrigger value="SELESAI">Selesai</TabsTrigger>
-        </TabsList>
+          <TabsList className="flex w-full bg-transparent p-0 gap-1 sm:gap-2 overflow-x-auto no-scrollbar justify-start border-b border-border pb-px rounded-none">
+            <TabsTrigger 
+              value="SEMUA" 
+              className="px-4 py-2 bg-transparent text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none shadow-none"
+            >
+              Semua
+            </TabsTrigger>
+            <TabsTrigger 
+              value="BELUM" 
+              className="px-4 py-2 bg-transparent text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none shadow-none"
+            >
+              Belum
+            </TabsTrigger>
+            <TabsTrigger 
+              value="SEDANG" 
+              className="px-4 py-2 bg-transparent text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none shadow-none"
+            >
+              Sedang
+            </TabsTrigger>
+            <TabsTrigger 
+              value="SELESAI" 
+              className="px-4 py-2 bg-transparent text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none shadow-none"
+            >
+              Selesai
+            </TabsTrigger>
+          </TabsList>
       </Tabs>
 
-      <div className="space-y-2">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
         {filteredTasks.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             Tidak ada tugas di kategori ini.
           </p>
         ) : (
-          filteredTasks.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center gap-4 border-b border-border py-3 px-2 hover:bg-muted/50"
-            >
-              <Checkbox
-                checked={t.status === "SELESAI"}
-                onCheckedChange={(c) => toggleTask(t.id, !!c)}
-              />
-              <div className="flex-1 min-w-0">
-                <span
-                  className={`block text-sm font-medium ${
-                    t.status === "SELESAI"
-                      ? "line-through text-muted-foreground"
-                      : ""
-                  }`}
-                >
-                  {t.title}
-                </span>
-                <span className="text-xs text-muted-foreground block">
-                  {t.dueDate
-                    ? new Date(t.dueDate).toLocaleDateString("id-ID")
-                    : "Tanpa tenggat waktu"}
-                  {t.assignedTo && ` • ${t.assignedTo.name}`}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {t.status === "SELESAI" && <StatusBadge variant="lunas" label="Selesai" />}
-                {t.status === "SEDANG_BERJALAN" && <StatusBadge variant="sedang" label="Sedang" />}
-                {t.status === "BELUM" && <StatusBadge variant="belum" label="Belum" />}
+          <div className="divide-y divide-border">
+            {filteredTasks.map((t) => (
+              <div
+                key={t.id}
+                className="flex flex-col sm:flex-row items-start sm:items-center gap-3 py-4 sm:py-3 px-4 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <Checkbox
+                    checked={t.status === "SELESAI"}
+                    onCheckedChange={(c) => toggleTask(t.id, !!c)}
+                    className="mt-0.5 sm:mt-0"
+                  />
+                  <div className="flex-1 min-w-0 sm:hidden">
+                    <span
+                      className={`block text-sm font-medium ${
+                        t.status === "SELESAI"
+                          ? "line-through text-muted-foreground"
+                          : ""
+                      }`}
+                    >
+                      {t.title}
+                    </span>
+                  </div>
+                </div>
                 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 px-2">
-                      <Trash className="w-4 h-4" />
+                <div className="flex-1 min-w-0 hidden sm:block">
+                  <span
+                    className={`block text-sm font-medium ${
+                      t.status === "SELESAI"
+                        ? "line-through text-muted-foreground truncate"
+                        : "truncate"
+                    }`}
+                  >
+                    {t.title}
+                  </span>
+                  <span className="text-xs text-muted-foreground block truncate mt-0.5">
+                    {t.dueDate ? new Date(t.dueDate).toLocaleDateString("id-ID") : "Tanpa tenggat waktu"}
+                    {t.assignedTo && ` • ${t.assignedTo.name}`}
+                  </span>
+                </div>
+                
+                {/* Mobile view metadata */}
+                <div className="pl-7 sm:hidden w-full space-y-2">
+                  <span className="text-xs text-muted-foreground block truncate">
+                    {t.dueDate ? new Date(t.dueDate).toLocaleDateString("id-ID") : "Tanpa tenggat waktu"}
+                    {t.assignedTo && ` • ${t.assignedTo.name}`}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between sm:justify-end gap-2 pl-7 sm:pl-0 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
+                  <div className="flex gap-2">
+                    {t.status === "SELESAI" && <StatusBadge variant="lunas" label="Selesai" />}
+                    {t.status === "SEDANG_BERJALAN" && <StatusBadge variant="sedang" label="Sedang" />}
+                    {t.status === "BELUM" && <StatusBadge variant="belum" label="Belum" />}
+                  </div>
+                  
+                  <AlertDialog>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary shrink-0" onClick={() => openEditTask(t)}>
+                      <Pencil className="w-4 h-4" />
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Hapus Task</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Task ini akan dihapus permanen. Lanjutkan?
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Batal</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => deleteTask(t.id)}>
-                        Hapus
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
+                        <Trash className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Hapus Task</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Task ini akan dihapus permanen. Lanjutkan?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteTask(t.id)}>
+                          Hapus
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
@@ -250,12 +334,7 @@ export default function ChecklistPage() {
         <StickyActionBar>
           <Button
             className="w-full"
-            onClick={() => {
-              setTaskTitle("");
-              setTaskDueDate("");
-              setTaskAssigned("none");
-              setDialogOpen(true);
-            }}
+            onClick={openAddTask}
           >
             <Plus className="w-4 h-4 mr-2" /> Tambah Task
           </Button>
@@ -263,44 +342,61 @@ export default function ChecklistPage() {
       </div>
 
       <Sheet open={dialogOpen} onOpenChange={setDialogOpen}>
-        <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl flex flex-col p-0">
+        <SheetContent side="bottom" className="max-h-[85vh] rounded-t-lg flex flex-col p-0 w-full">
           <SheetHeader className="p-6 pb-0">
-            <SheetTitle>Tambah Task</SheetTitle>
-            <SheetDescription>Masukkan detail task baru.</SheetDescription>
+            <SheetTitle>{editingTask ? "Edit Task" : "Tambah Task"}</SheetTitle>
+            <SheetDescription>
+              {editingTask ? "Ubah detail task." : "Masukkan detail task baru."}
+            </SheetDescription>
           </SheetHeader>
           <div className="overflow-y-auto flex-1 p-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="tTitle">Judul Task</Label>
-                <Input
-                  id="tTitle"
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tDue">Tenggat Waktu</Label>
-                <Input
-                  id="tDue"
-                  type="date"
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                />
-              </div>
+                    <Label htmlFor="tTitle">Judul Task</Label>
+                    <Input
+                      id="tTitle"
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      className="w-full sm:w-3/4"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tDue">Tenggat Waktu</Label>
+                    <Input
+                      id="tDue"
+                      type="date"
+                      value={taskDueDate}
+                      onChange={(e) => setTaskDueDate(e.target.value)}
+                      className="w-full sm:w-2/3"
+                    />
+                  </div>
               <div className="space-y-2">
                 <Label>Ditugaskan Kepada</Label>
                 <Select value={taskAssigned} onValueChange={setTaskAssigned}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Pilih anggota" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="w-full">
                     <SelectItem value="none">Tidak ada</SelectItem>
                     {members.map((m) => (
                       <SelectItem key={m.user.id} value={m.user.id}>
                         {m.user.name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={taskStatus} onValueChange={setTaskStatus}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pilih status" />
+                  </SelectTrigger>
+                  <SelectContent className="w-full">
+                    <SelectItem value="BELUM">Belum</SelectItem>
+                    <SelectItem value="SEDANG_BERJALAN">Sedang Dikerjakan</SelectItem>
+                    <SelectItem value="SELESAI">Selesai</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

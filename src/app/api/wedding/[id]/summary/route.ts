@@ -43,7 +43,16 @@ export async function GET(
     });
 
     const totalBudget = budgetAgg.reduce((acc: number, curr: BudgetGroup) => acc + Number(curr._sum.budgetAmount || 0), 0);
-    const totalActual = budgetAgg.reduce((acc: number, curr: BudgetGroup) => acc + Number(curr._sum.actualAmount || 0), 0);
+    const totalActualFromBudget = budgetAgg.reduce((acc: number, curr: BudgetGroup) => acc + Number(curr._sum.actualAmount || 0), 0);
+
+    // Sum all payments for the wedding
+    const paymentAmounts = await prisma.payment.findMany({
+      where: { vendor: { weddingId: id } },
+      select: { amount: true },
+    });
+    const totalPaymentAmount = paymentAmounts.reduce((sum: number, p) => sum + Number(p.amount ?? 0), 0);
+
+    const totalActual = totalActualFromBudget + totalPaymentAmount;
 
     const overBudgetCategories = await prisma.category.findMany({
       where: { weddingId: id },

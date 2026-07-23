@@ -52,7 +52,8 @@ interface Payment {
   status: string;
   paidAt?: string | null;
   vendorId: string;
-  vendorName: string;
+  vendorName?: string;
+  vendor?: { name: string };
 }
 
 const fmt = (amount: number) =>
@@ -236,13 +237,13 @@ export default function VendorsPage() {
         {vendors.map((v) => {
           const vPayments = payments.filter((p) => p.vendorId === v.id);
           return (
-            <Card key={v.id}>
-              <CardContent className="p-6">
+            <Card key={v.id} className="flex flex-col h-full">
+              <CardContent className="p-6 flex flex-col flex-1">
                 <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-display text-xl truncate">{v.name}</h3>
+                  <div className="flex-1 pr-4 overflow-hidden">
+                    <h3 className="font-display text-xl truncate" title={v.name}>{v.name}</h3>
                     {v.contact && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground truncate" title={v.contact}>
                         {v.contact}
                       </p>
                     )}
@@ -252,18 +253,20 @@ export default function VendorsPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => openEditVendor(v)}
                     >
-                      <Pencil className="w-4 h-4 mr-2" /> Edit
+                      <Pencil className="w-4 h-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Edit</span>
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="sm">
-                          <Trash className="w-4 h-4 mr-2" /> Hapus
+                          <Trash className="w-4 h-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Hapus</span>
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -287,7 +290,7 @@ export default function VendorsPage() {
 
                 <SectionHeading title="Pembayaran" className="text-base" />
 
-                <div className="space-y-2 mb-4">
+                <div className="space-y-2 mb-4 flex-1">
                   {vPayments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       Belum ada jadwal pembayaran.
@@ -304,39 +307,42 @@ export default function VendorsPage() {
                         }
                         value={fmt(p.amount)}
                       >
-                        {getStatusBadge(p)}
-                        {p.status !== "SUDAH_BAYAR" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => markPaid(p.id)}
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" /> Tandai Lunas
-                          </Button>
-                        )}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash className="w-4 h-4 mr-2" /> Hapus
+                        <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap justify-end w-full sm:w-auto">
+                          {getStatusBadge(p)}
+                          {p.status !== "SUDAH_BAYAR" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => markPaid(p.id)}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Lunas</span>
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus Pembayaran</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Pembayaran ini akan dihapus. Lanjutkan?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deletePayment(p.id)}
-                              >
-                                Hapus
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 px-2">
+                                <Trash className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus Pembayaran</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Pembayaran ini akan dihapus. Lanjutkan?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deletePayment(p.id)}
+                                >
+                                  Hapus
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </LedgerRow>
                     ))
                   )}
@@ -344,6 +350,7 @@ export default function VendorsPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto mt-auto"
                   onClick={() => openAddPayment(v.id)}
                 >
                   <Plus className="w-4 h-4 mr-2" /> Pembayaran
