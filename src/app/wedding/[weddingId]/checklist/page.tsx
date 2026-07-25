@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,33 +58,20 @@ export default function ChecklistPage() {
   const params = useParams();
   const weddingId = params.weddingId as string;
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("SEMUA");
+  const { data: tData, isLoading: loadingT, mutate: mutateTasks } = useSWR(`/api/wedding/${weddingId}/tasks`, fetcher);
+  const { data: mData, isLoading: loadingM } = useSWR(`/api/wedding/${weddingId}/members`, fetcher);
+  
+  const tasks = Array.isArray(tData) ? tData : [];
+  const members = Array.isArray(mData) ? mData : [];
+  const loading = loadingT || loadingM;
 
+  const [filter, setFilter] = useState("SEMUA");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskAssigned, setTaskAssigned] = useState("");
   const [taskStatus, setTaskStatus] = useState("BELUM");
-
-  const fetchData = useCallback(async () => {
-    const [tRes, mRes] = await Promise.all([
-      fetch(`/api/wedding/${weddingId}/tasks`),
-      fetch(`/api/wedding/${weddingId}/members`),
-    ]);
-    const tData = await tRes.json();
-    const mData = await mRes.json();
-    if (Array.isArray(tData)) setTasks(tData);
-    if (Array.isArray(mData)) setMembers(mData);
-    setLoading(false);
-  }, [weddingId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const saveTask = async () => {
     const payload = {
@@ -100,7 +89,7 @@ export default function ChecklistPage() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setTasks(tasks.map((t) => (t.id === updated.id ? updated : t)));
+        mutateTasks(tasks.map((t) => (t.id === updated.id ? updated : t)), false);
       }
     } else {
       const res = await fetch(`/api/wedding/${weddingId}/tasks`, {
@@ -110,7 +99,7 @@ export default function ChecklistPage() {
       });
       if (res.ok) {
         const created = await res.json();
-        setTasks([...tasks, created]);
+        mutateTasks([...tasks, created], false);
       }
     }
     setDialogOpen(false);
@@ -125,7 +114,7 @@ export default function ChecklistPage() {
     });
     if (res.ok) {
       const updated = await res.json();
-      setTasks(tasks.map((t) => (t.id === taskId ? updated : t)));
+      mutateTasks(tasks.map((t) => (t.id === taskId ? updated : t)), false);
     }
   };
 
@@ -134,7 +123,7 @@ export default function ChecklistPage() {
       method: "DELETE",
     });
     if (res.ok) {
-      setTasks(tasks.filter((t) => t.id !== taskId));
+      mutateTasks(tasks.filter((t) => t.id !== taskId), false);
     }
   };
 

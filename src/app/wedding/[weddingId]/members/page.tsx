@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, use } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,22 +21,12 @@ interface Member {
 
 export default function MembersPage({ params }: { params: Promise<{ weddingId: string }> }) {
   const { weddingId } = use(params);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: membersData, isLoading: loading, mutate } = useSWR(`/api/wedding/${weddingId}/members`, fetcher);
+  const members = Array.isArray(membersData) ? membersData : [];
+
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(`/api/wedding/${weddingId}/members`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setMembers(data);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [weddingId]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +46,7 @@ export default function MembersPage({ params }: { params: Promise<{ weddingId: s
     } else {
       setSuccess("Partner berhasil diundang");
       setEmail("");
-      setMembers((prev) => [...prev, data]);
+      mutate([...members, data], false);
     }
   };
 

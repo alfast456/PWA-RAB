@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,9 +69,12 @@ export default function VendorsPage() {
   const params = useParams();
   const weddingId = params.weddingId as string;
 
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: vData, isLoading: loadingV, mutate: mutateVendors } = useSWR(`/api/wedding/${weddingId}/vendors`, fetcher);
+  const { data: pData, isLoading: loadingP, mutate: mutatePayments } = useSWR(`/api/wedding/${weddingId}/payments`, fetcher);
+  
+  const vendors = Array.isArray(vData) ? vData : [];
+  const payments = Array.isArray(pData) ? pData : [];
+  const loading = loadingV || loadingP;
 
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
@@ -82,22 +87,6 @@ export default function VendorsPage() {
   const [paymentType, setPaymentType] = useState("DP");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDueDate, setPaymentDueDate] = useState("");
-
-  const fetchData = useCallback(async () => {
-    const [vRes, pRes] = await Promise.all([
-      fetch(`/api/wedding/${weddingId}/vendors`),
-      fetch(`/api/wedding/${weddingId}/payments`),
-    ]);
-    const vData = await vRes.json();
-    const pData = await pRes.json();
-    if (Array.isArray(vData)) setVendors(vData);
-    if (Array.isArray(pData)) setPayments(pData);
-    setLoading(false);
-  }, [weddingId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const openAddVendor = () => {
     setEditingVendor(null);
@@ -129,7 +118,7 @@ export default function VendorsPage() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setVendors(vendors.map((v) => (v.id === updated.id ? updated : v)));
+        mutateVendors(vendors.map((v) => (v.id === updated.id ? updated : v)), false);
       }
     } else {
       const res = await fetch(`/api/wedding/${weddingId}/vendors`, {
@@ -139,7 +128,7 @@ export default function VendorsPage() {
       });
       if (res.ok) {
         const created = await res.json();
-        setVendors([...vendors, created]);
+        mutateVendors([...vendors, created], false);
       }
     }
     setVendorDialogOpen(false);
@@ -150,8 +139,8 @@ export default function VendorsPage() {
       method: "DELETE",
     });
     if (res.ok) {
-      setVendors(vendors.filter((v) => v.id !== id));
-      setPayments(payments.filter((p) => p.vendorId !== id));
+      mutateVendors(vendors.filter((v) => v.id !== id), false);
+      mutatePayments(payments.filter((p) => p.vendorId !== id), false);
     }
   };
 
@@ -176,7 +165,7 @@ export default function VendorsPage() {
     });
     if (res.ok) {
       const created = await res.json();
-      setPayments([...payments, created]);
+      mutatePayments([...payments, created], false);
     }
     setPaymentDialogOpen(false);
   };
@@ -189,7 +178,7 @@ export default function VendorsPage() {
     });
     if (res.ok) {
       const updated = await res.json();
-      setPayments(payments.map((p) => (p.id === id ? updated : p)));
+      mutatePayments(payments.map((p) => (p.id === id ? updated : p)), false);
     }
   };
 
@@ -198,7 +187,7 @@ export default function VendorsPage() {
       method: "DELETE",
     });
     if (res.ok) {
-      setPayments(payments.filter((p) => p.id !== id));
+      mutatePayments(payments.filter((p) => p.id !== id), false);
     }
   };
 

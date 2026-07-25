@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,17 +16,8 @@ interface Wedding {
 }
 
 export default function WeddingListPage() {
-  const [weddings, setWeddings] = useState<Wedding[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/wedding", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setWeddings(data);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: weddingsData, isLoading: loading } = useSWR("/api/wedding", fetcher);
+  const weddings = Array.isArray(weddingsData) ? weddingsData : [];
 
   if (loading) return <div className="p-6 text-muted-foreground">Memuat...</div>;
 

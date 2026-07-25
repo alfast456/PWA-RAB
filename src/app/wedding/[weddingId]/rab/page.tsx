@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,10 +68,14 @@ export default function RabPage() {
   const params = useParams();
   const weddingId = params.weddingId as string;
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<BudgetItem[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: cData, isLoading: loadingC, mutate: mutateCat } = useSWR(`/api/wedding/${weddingId}/categories`, fetcher);
+  const { data: iData, isLoading: loadingI, mutate: mutateItem } = useSWR(`/api/wedding/${weddingId}/budget-items`, fetcher);
+  const { data: sData, isLoading: loadingS } = useSWR(`/api/wedding/${weddingId}/summary`, fetcher);
+  
+  const categories = Array.isArray(cData) ? cData : [];
+  const items = Array.isArray(iData) ? iData : [];
+  const summary = sData || null;
+  const loading = loadingC || loadingI || loadingS;
 
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
@@ -82,24 +88,6 @@ export default function RabPage() {
   const [itemBudget, setItemBudget] = useState("");
   const [itemActual, setItemActual] = useState("");
   const [itemNotes, setItemNotes] = useState("");
-
-  const fetchData = useCallback(async () => {
-    const [catRes, itemRes, sumRes] = await Promise.all([
-      fetch(`/api/wedding/${weddingId}/categories`),
-      fetch(`/api/wedding/${weddingId}/budget-items`),
-      fetch(`/api/wedding/${weddingId}/summary`),
-    ]);
-    const catData = await catRes.json();
-    const itemData = await itemRes.json();
-    if (Array.isArray(catData)) setCategories(catData);
-    if (Array.isArray(itemData)) setItems(itemData);
-    if (sumRes.ok) setSummary(await sumRes.json());
-    setLoading(false);
-  }, [weddingId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const getCategoryItems = (catId: string) =>
     items.filter((i) => i.categoryId === catId);
@@ -141,7 +129,7 @@ export default function RabPage() {
       );
       if (res.ok) {
         const updated = await res.json();
-        setCategories(categories.map((c) => (c.id === updated.id ? updated : c)));
+        mutateCat(categories.map((c) => (c.id === updated.id ? updated : c)), false);
       }
     } else {
       const res = await fetch(`/api/wedding/${weddingId}/categories`, {
@@ -151,7 +139,7 @@ export default function RabPage() {
       });
       if (res.ok) {
         const created = await res.json();
-        setCategories([...categories, created]);
+        mutateCat([...categories, created], false);
       }
     }
     setCatDialogOpen(false);
@@ -162,9 +150,8 @@ export default function RabPage() {
       method: "DELETE",
     });
     if (res.ok) {
-      setCategories(categories.filter((c) => c.id !== catId));
-      setItems(items.filter((i) => i.categoryId !== catId));
-      fetchData();
+      mutateCat(categories.filter((c) => c.id !== catId), false);
+      mutateItem(items.filter((i) => i.categoryId !== catId), false);
     }
   };
 
@@ -207,8 +194,7 @@ export default function RabPage() {
       );
       if (res.ok) {
         const updated = await res.json();
-        setItems(items.map((i) => (i.id === updated.id ? updated : i)));
-        fetchData();
+        mutateItem(items.map((i) => (i.id === updated.id ? updated : i)), false);
       }
     } else {
       const res = await fetch(`/api/wedding/${weddingId}/budget-items`, {
@@ -218,8 +204,7 @@ export default function RabPage() {
       });
       if (res.ok) {
         const created = await res.json();
-        setItems([...items, created]);
-        fetchData();
+        mutateItem([...items, created], false);
       }
     }
     setItemDialogOpen(false);
@@ -231,8 +216,7 @@ export default function RabPage() {
       { method: "DELETE" }
     );
     if (res.ok) {
-      setItems(items.filter((i) => i.id !== itemId));
-      fetchData();
+      mutateItem(items.filter((i) => i.id !== itemId), false);
     }
   };
 

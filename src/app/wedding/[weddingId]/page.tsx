@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -28,25 +30,7 @@ export default function WeddingDashboardPage() {
   const params = useParams();
   const weddingId = params.weddingId as string;
 
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchSummary = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/wedding/${weddingId}/summary`);
-      if (res.ok) {
-        setSummary(await res.json());
-      }
-    } catch {
-      // Fetch error handled by null check below
-    } finally {
-      setLoading(false);
-    }
-  }, [weddingId]);
-
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+  const { data: summary, isLoading: loading } = useSWR<Summary>(`/api/wedding/${weddingId}/summary`, fetcher);
 
   if (loading) {
     return (
